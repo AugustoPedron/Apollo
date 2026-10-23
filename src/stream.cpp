@@ -731,24 +731,26 @@ namespace stream {
    * @param slice_size The number of bytes between insertions.
    * @param data1 The first data buffer.
    * @param data2 The second data buffer.
+   * @param buffer The buffer holding the sliced buffers
    */
-  std::vector<uint8_t> concat_and_insert(uint64_t insert_size, uint64_t slice_size, const std::string_view &data1, const std::string_view &data2) {
+  void concat_and_insert(uint64_t insert_size, uint64_t slice_size, const std::string_view &data1, const std::string_view &data2, std::vector<uint8_t> &buffer) {
     auto data_size = data1.size() + data2.size();
     auto pad = data_size % slice_size != 0;
     auto elements = data_size / slice_size + (pad ? 1 : 0);
 
-    std::vector<uint8_t> result;
-    result.resize(elements * insert_size + data_size);
+    buffer.resize(elements * insert_size + data_size);
 
     auto next = std::begin(data1);
     auto end = std::end(data1);
     for (auto x = 0; x < elements; ++x) {
-      void *p = &result[x * (insert_size + slice_size)];
+      void *p = &buffer[x * (insert_size + slice_size)];
 
       // For the last iteration, only copy to the end of the data
       if (x == elements - 1) {
         slice_size = data_size - (x * slice_size);
       }
+
+      std::memset((char *) p, 0, insert_size);
 
       // Test if this slice will extend into the next buffer
       if (next + slice_size > end) {
@@ -766,8 +768,6 @@ namespace stream {
         next += slice_size;
       }
     }
-
-    return result;
   }
 
   std::vector<uint8_t> replace(const std::string_view &original, const std::string_view &old, const std::string_view &_new) {
@@ -1348,6 +1348,13 @@ namespace stream {
 
     auto ratecontrol_next_frame_start = std::chrono::steady_clock::now();
 
+    video_short_frame_header_t frame_header = {};
+    frame_header.headerType = 0x01;  // Short header type
+
+    auto fecPercentage = config::stream.fec_percentage;
+
+    std::vector<uint8_t> payload_new;
+
     while (auto packet = packets->pop()) {
       if (shutdown_event->peek()) {
         break;
@@ -1375,8 +1382,6 @@ namespace stream {
         }
       }
 
-      video_short_frame_header_t frame_header = {};
-      frame_header.headerType = 0x01;  // Short header type
       frame_header.frameType = packet->is_idr()                     ? 2 :
                                packet->after_ref_frame_invalidation ? 5 :
                                                                       1;
@@ -1398,12 +1403,10 @@ namespace stream {
         frame_header.frame_processing_latency = 0;
       }
 
-      auto fecPercentage = config::stream.fec_percentage;
-
       // Insert space for packet headers
       auto blocksize = session->config.packetsize + MAX_RTP_HEADER_SIZE;
       auto payload_blocksize = blocksize - sizeof(video_packet_raw_t);
-      auto payload_new = concat_and_insert(sizeof(video_packet_raw_t), payload_blocksize, std::string_view {(char *) &frame_header, sizeof(frame_header)}, payload);
+      concat_and_insert(sizeof(video_packet_raw_t), payload_blocksize, std::string_view {(char *) &frame_header, sizeof(frame_header)}, payload, payload_new);
 
       payload = std::string_view {(char *) payload_new.data(), payload_new.size()};
 
@@ -1460,8 +1463,8 @@ namespace stream {
       }
 
       try {
-        // Use around 80% of 1Gbps          1Gbps            percent    ms     packet      byte
-        size_t ratecontrol_packets_in_1ms = std::giga::num * 80 / 100 / 1000 / blocksize / 8;
+        // Use around 80% of 1Gbps          1Gbps            percent    ms     byte  packet
+        size_t ratecontrol_packets_in_1ms = std::giga::num * 80 / 100 / 1000 / 8 / blocksize;
 
         // Send less than 64K in a single batch.
         // On Windows, batches above 64K seem to bypass SO_SNDBUF regardless of its size,
