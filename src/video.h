@@ -4,6 +4,9 @@
  */
 #pragma once
 
+// standard includes
+#include <string_view>
+
 // local includes
 #include "input.h"
 #include "platform/common.h"
@@ -49,6 +52,29 @@ namespace video {
     int encodingFramerate; // Requested display framerate
     bool input_only;
   };
+
+  namespace amf {
+
+    /**
+     * @brief Enumerates supported coder options for the AMF encoder.
+     */
+    enum class coder_e : int {
+      auto_ = 0,  ///< Select the coder based on the H.264 profile.
+      cabac = 1,  ///< CABAC entropy coding.
+      cavlc = 2,  ///< CAVLC entropy coding.
+    };
+
+  }  // namespace amf
+
+  /**
+   * @brief Select the effective FFmpeg H.264 profile for an encoder configuration.
+   *
+   * @param encoder_name FFmpeg encoder name selected for the stream.
+   * @param config Encoding configuration requested by the remote client.
+   * @param amd_coder Configured AMF entropy-coder value.
+   * @return FFmpeg H.264 profile applied to the codec context.
+   */
+  int select_h264_profile(std::string_view encoder_name, const config_t &config, int amd_coder);
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);
   platf::pix_fmt_e map_pix_fmt(AVPixelFormat fmt);

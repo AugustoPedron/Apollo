@@ -7,6 +7,7 @@
 #include <bitset>
 #include <list>
 #include <thread>
+#include <utility>
 
 // lib includes
 #include <boost/pointer_cast.hpp>
@@ -127,6 +128,18 @@ namespace video {
     };
 
   }  // namespace qsv
+
+  int select_h264_profile(std::string_view encoder_name, const config_t &config, int amd_coder) {
+    if (config.chromaSamplingType == 1) {
+      return AV_PROFILE_H264_HIGH_444_PREDICTIVE;
+    }
+
+    if (encoder_name == "h264_amf"sv && amd_coder == std::to_underlying(amf::coder_e::cavlc)) {
+      return AV_PROFILE_H264_CONSTRAINED_BASELINE;
+    }
+
+    return AV_PROFILE_H264_HIGH;
+  }
 
   util::Either<avcodec_buffer_t, int> dxgi_init_avcodec_hardware_input_buffer(platf::avcodec_encode_device_t *);
   util::Either<avcodec_buffer_t, int> vaapi_init_avcodec_hardware_input_buffer(platf::avcodec_encode_device_t *);
@@ -824,14 +837,7 @@ namespace video {
         {"coder"s, &config::video.amd.amd_coder},
         {"enforce_hrd"s, &config::video.amd.amd_enforce_hrd},
       },
-      {
-        // SDR-specific options
-        {"profile"s, [](const config_t &cfg) {
-           if (cfg.profile == 66) return "baseline"s;
-           if (cfg.profile == 77) return "main"s;
-           return "high"s;
-         }},
-      },
+      {},  // SDR-specific options
       {},  // HDR-specific options
       {},  // YUV444 SDR-specific options
       {},  // YUV444 HDR-specific options
@@ -1577,7 +1583,7 @@ namespace video {
         case 0:
           // 10-bit h264 encoding is not supported by our streaming protocol
           assert(!config.dynamicRange);
-          ctx->profile = (config.chromaSamplingType == 1) ? AV_PROFILE_H264_HIGH_444_PREDICTIVE : AV_PROFILE_H264_HIGH;
+          ctx->profile = select_h264_profile(video_format.name, config, config::video.amd.amd_coder);
           break;
 
         case 1:
