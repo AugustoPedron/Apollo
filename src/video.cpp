@@ -13,11 +13,16 @@
 #include <boost/pointer_cast.hpp>
 
 extern "C" {
+#include <libavcodec/version.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 }
+
+// The Sunshine merge brought code written for FFmpeg 8.0 (libavcodec 62), but build-deps is pinned to
+// FFmpeg 7.1. Encoder options and end-of-stream handling that only work with 8.0 are enabled through this.
+#define FFMPEG_8_OR_LATER (LIBAVCODEC_VERSION_MAJOR >= 62)
 
 // local includes
 #include "process.h"
@@ -338,11 +343,14 @@ namespace video {
     avcodec_encode_session_t(avcodec_encode_session_t &&other) noexcept = default;
 
     ~avcodec_encode_session_t() {
-      // Flush any remaining frames in the encoder
+#if FFMPEG_8_OR_LATER
+      // Flush any remaining frames in the encoder.
+      // Not done with FFmpeg 7.1: draining the patched AMF encoder never completes and hangs here.
       if (avcodec_send_frame(avcodec_ctx.get(), nullptr) == 0) {
         packet_raw_avcodec pkt;
         while (avcodec_receive_packet(avcodec_ctx.get(), pkt.av_packet) == 0);
       }
+#endif
 
       // Order matters here because the context relies on the hwdevice still being valid
       avcodec_ctx.reset();
@@ -565,7 +573,11 @@ namespace video {
         {"forced-idr"s, 1},
         {"zerolatency"s, 1},
         {"surfaces"s, 1},
+#if FFMPEG_8_OR_LATER
         {"cbr_padding"s, false},
+#else
+        {"filler_data"s, false},
+#endif
         {"preset"s, &config::video.nv_legacy.preset},
         {"tune"s, NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY},
         {"rc"s, NV_ENC_PARAMS_RC_CBR},
@@ -586,7 +598,9 @@ namespace video {
         {"forced-idr"s, 1},
         {"zerolatency"s, 1},
         {"surfaces"s, 1},
+#if FFMPEG_8_OR_LATER
         {"cbr_padding"s, false},
+#endif
         {"preset"s, &config::video.nv_legacy.preset},
         {"tune"s, NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY},
         {"rc"s, NV_ENC_PARAMS_RC_CBR},
@@ -612,7 +626,9 @@ namespace video {
         {"forced-idr"s, 1},
         {"zerolatency"s, 1},
         {"surfaces"s, 1},
+#if FFMPEG_8_OR_LATER
         {"cbr_padding"s, false},
+#endif
         {"preset"s, &config::video.nv_legacy.preset},
         {"tune"s, NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY},
         {"rc"s, NV_ENC_PARAMS_RC_CBR},
@@ -761,7 +777,9 @@ namespace video {
         {"filler_data"s, false},
         {"forced_idr"s, 1},
         {"latency"s, "lowest_latency"s},
+#if FFMPEG_8_OR_LATER
         {"async_depth"s, 1},
+#endif
         {"skip_frame"s, 0},
         {"log_to_dbg"s, []() {
            return config::sunshine.min_log_level < 2 ? 1 : 0;
@@ -785,7 +803,9 @@ namespace video {
         {"filler_data"s, false},
         {"forced_idr"s, 1},
         {"latency"s, 1},
+#if FFMPEG_8_OR_LATER
         {"async_depth"s, 1},
+#endif
         {"skip_frame"s, 0},
         {"log_to_dbg"s, []() {
            return config::sunshine.min_log_level < 2 ? 1 : 0;
@@ -824,7 +844,9 @@ namespace video {
         {"filler_data"s, false},
         {"forced_idr"s, 1},
         {"latency"s, 1},
+#if FFMPEG_8_OR_LATER
         {"async_depth"s, 1},
+#endif
         {"frame_skipping"s, 0},
         {"log_to_dbg"s, []() {
            return config::sunshine.min_log_level < 2 ? 1 : 0;
