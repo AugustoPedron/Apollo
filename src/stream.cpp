@@ -1355,6 +1355,8 @@ namespace stream {
 
     std::vector<uint8_t> payload_new;
 
+    bool isBatchSendAvailable = true;
+
     while (auto packet = packets->pop()) {
       if (shutdown_event->peek()) {
         break;
@@ -1598,7 +1600,7 @@ namespace stream {
 
               frame_send_batch_latency_logger.first_point_now();
               // Use a batched send if it's supported on this platform
-              if (!platf::send_batch(batch_info)) {
+              if (!isBatchSendAvailable || !(isBatchSendAvailable = platf::send_batch(batch_info))) {
                 // Batched send is not available, so send each packet individually
                 BOOST_LOG(verbose) << "Falling back to unbatched send"sv;
                 for (auto y = 0; y < current_batch_size; y++) {
