@@ -770,21 +770,30 @@ namespace stream {
     }
   }
 
-  std::vector<uint8_t> replace(const std::string_view &original, const std::string_view &old, const std::string_view &_new) {
-    std::vector<uint8_t> replaced;
-    replaced.reserve(original.size() + _new.size() - old.size());
-
+  void replace(std::vector<uint8_t> &original, const std::string_view &old, const std::string_view &_new) {
     auto begin = std::begin(original);
     auto end = std::end(original);
-    auto next = std::search(begin, end, std::begin(old), std::end(old));
+    auto old_begin = (const uint8_t *) old.data();
+    auto next = std::search(begin, end, old_begin, old_begin + old.size());
 
-    std::copy(begin, next, std::back_inserter(replaced));
-    if (next != end) {
-      std::copy(std::begin(_new), std::end(_new), std::back_inserter(replaced));
-      std::copy(next + old.size(), end, std::back_inserter(replaced));
+    size_t pos = next - begin;
+
+    if(next == end)
+      return;
+
+    if(old.size() < _new.size()) {
+      original.resize(original.size() - old.size() + _new.size());
+      end = std::end(original);
+      std::rotate(std::begin(original) + pos, end - (_new.size() - old.size()), end);
+      std::copy(std::begin(_new), std::end(_new), std::begin(original) + pos);
     }
-
-    return replaced;
+    else if(old.size() > _new.size()){
+      std::copy(std::begin(_new), std::end(_new), next);
+      original.erase(next + _new.size(), next + _new.size() + (old.size() - _new.size()));
+    }
+    else{
+      std::copy(std::begin(_new), std::end(_new), next);
+    }
   }
 
   /**
@@ -1353,9 +1362,11 @@ namespace stream {
 
     auto fecPercentage = config::stream.fec_percentage;
 
+    std::vector<uint8_t> payload_vec;
     std::vector<uint8_t> payload_new;
 
-    bool isBatchSendAvailable = true;
+    // Checked once: a failed send_batch() can be transient, so it is retried for every batch
+    const bool batch_send_supported = platf::send_batch_supported((uintptr_t) sock.native_handle());
 
     while (auto packet = packets->pop()) {
       if (shutdown_event->peek()) {
@@ -1368,20 +1379,19 @@ namespace stream {
       auto lowseq = session->video.lowseq;
 
       std::string_view payload {(char *) packet->data(), packet->data_size()};
-      std::vector<uint8_t> payload_with_replacements;
 
       // Apply replacements on the packet payload before performing any other operations.
       // We need to know the final frame size to calculate the last packet size, and we
       // must avoid matching replacements against the frame header or any other non-video
       // part of the payload.
-      if (packet->is_idr() && packet->replacements) {
-        for (auto &replacement : *packet->replacements) {
-          auto frame_old = replacement.old;
-          auto frame_new = replacement._new;
+      if (packet->is_idr() && !packet->replacements.empty()) {
+        payload_vec.assign(packet->data(), packet->data() + packet->data_size());
 
-          payload_with_replacements = replace(payload, frame_old, frame_new);
-          payload = {(char *) payload_with_replacements.data(), payload_with_replacements.size()};
+        for (auto &replacement : *packet->replacements) {
+          replace(payload_vec, replacement.old, replacement._new);
         }
+
+        payload = {(char *) payload_vec.data(), payload_vec.size()};
       }
 
       frame_header.frameType = packet->is_idr()                     ? 2 :
@@ -1600,7 +1610,7 @@ namespace stream {
 
               frame_send_batch_latency_logger.first_point_now();
               // Use a batched send if it's supported on this platform
-              if (!isBatchSendAvailable || !(isBatchSendAvailable = platf::send_batch(batch_info))) {
+              if (!batch_send_supported || !platf::send_batch(batch_info)) {
                 // Batched send is not available, so send each packet individually
                 BOOST_LOG(verbose) << "Falling back to unbatched send"sv;
                 for (auto y = 0; y < current_batch_size; y++) {

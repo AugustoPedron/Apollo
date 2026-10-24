@@ -1508,6 +1508,19 @@ namespace platf {
     return WSASendMsg((SOCKET) send_info.native_socket, &msg, 0, &bytes_sent, nullptr, nullptr) != SOCKET_ERROR;
   }
 
+  bool send_batch_supported(std::uintptr_t native_socket) {
+    // The network stack segments the batch (in software if the NIC has no USO), so batching works
+    // whenever the OS knows UDP_SEND_MSG_SIZE (Windows 10 2004 and later). Older versions reject the option.
+    DWORD msg_size;
+    int len = sizeof(msg_size);
+    if (getsockopt((SOCKET) native_socket, IPPROTO_UDP, UDP_SEND_MSG_SIZE, (char *) &msg_size, &len) == SOCKET_ERROR) {
+      BOOST_LOG(info) << "UDP segmentation is not supported (error "sv << WSAGetLastError() << "), sending video packets individually"sv;
+      return false;
+    }
+
+    return true;
+  }
+
   bool send(send_info_t &send_info) {
     WSAMSG msg;
 

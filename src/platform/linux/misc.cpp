@@ -653,6 +653,11 @@ std::string get_local_ip_for_gateway() {
     }
   }
 
+  bool send_batch_supported(std::uintptr_t native_socket) {
+    // send_batch() falls back from UDP_SEGMENT to sendmmsg() by itself
+    return true;
+  }
+
   bool send(send_info_t &send_info) {
     auto sockfd = (int) send_info.native_socket;
     struct msghdr msg = {};

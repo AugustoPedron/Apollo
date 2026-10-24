@@ -696,6 +696,15 @@ namespace platf {
 
   bool send_batch(batched_send_info_t &send_info);
 
+  /**
+   * @brief Check whether send_batch() can ever succeed on this socket.
+   * @details Meant to be called once: when this returns false, callers can use send() directly.
+   * A failed send_batch() call can be transient and is not a reason to stop using it.
+   * @param native_socket The socket the batches will be sent on.
+   * @return true if batched sends are supported.
+   */
+  bool send_batch_supported(std::uintptr_t native_socket);
+
   struct send_info_t {
     const char *header;
     size_t header_size;

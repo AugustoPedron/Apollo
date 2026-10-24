@@ -306,6 +306,10 @@ namespace platf {
     return false;
   }
 
+  bool send_batch_supported(std::uintptr_t native_socket) {
+    return false;
+  }
+
   bool send(send_info_t &send_info) {
     auto sockfd = (int) send_info.native_socket;
     struct msghdr msg = {};
