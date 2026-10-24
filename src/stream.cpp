@@ -1384,7 +1384,7 @@ namespace stream {
       // We need to know the final frame size to calculate the last packet size, and we
       // must avoid matching replacements against the frame header or any other non-video
       // part of the payload.
-      if (packet->is_idr() && !packet->replacements.empty()) {
+      if (packet->is_idr() && packet->replacements && !packet->replacements->empty()) {
         payload_vec.assign(packet->data(), packet->data() + packet->data_size());
 
         for (auto &replacement : *packet->replacements) {

@@ -20,8 +20,8 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 }
 
-// The Sunshine merge brought code written for FFmpeg 8.0 (libavcodec 62), but build-deps is pinned to
-// FFmpeg 7.1. Encoder options and end-of-stream handling that only work with 8.0 are enabled through this.
+// build-deps provides FFmpeg 8 (libavcodec 62). Encoder options and end-of-stream handling that only work
+// with 8 are kept behind this, so building against FFmpeg 7.1 (FFMPEG_PREPARED_BINARIES) still works.
 #define FFMPEG_8_OR_LATER (LIBAVCODEC_VERSION_MAJOR >= 62)
 
 // local includes
@@ -344,9 +344,9 @@ namespace video {
 
     ~avcodec_encode_session_t() {
 #if FFMPEG_8_OR_LATER
-      // Flush any remaining frames in the encoder.
+      // Flush any remaining frames in the encoder, but only if it received any (a moved-from session has no context).
       // Not done with FFmpeg 7.1: draining the patched AMF encoder never completes and hangs here.
-      if (avcodec_send_frame(avcodec_ctx.get(), nullptr) == 0) {
+      if (avcodec_ctx && avcodec_ctx->frame_num > 0 && avcodec_send_frame(avcodec_ctx.get(), nullptr) == 0) {
         packet_raw_avcodec pkt;
         while (avcodec_receive_packet(avcodec_ctx.get(), pkt.av_packet) == 0);
       }
