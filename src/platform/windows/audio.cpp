@@ -505,9 +505,10 @@ namespace platf::audio {
         return -1;
       }
 
+      // GetDevicePeriod() reports 100-nanosecond units. At least 1 ms, so the wait never becomes a busy poll.
       REFERENCE_TIME default_latency;
       audio_client->GetDevicePeriod(&default_latency, nullptr);
-      default_latency_ms = default_latency / 1000;
+      default_latency_ms = std::max<DWORD>(1, (DWORD) (default_latency / 10000));
 
       std::uint32_t frames;
       status = audio_client->GetBufferSize(&frames);
@@ -673,7 +674,7 @@ namespace platf::audio {
     audio_notification_t endpt_notification;
     std::optional<std::function<void()>> default_endpt_changed_cb;
 
-    REFERENCE_TIME default_latency_ms;
+    DWORD default_latency_ms;
 
     util::buffer_t<float> sample_buf;
     float *sample_buf_pos;
