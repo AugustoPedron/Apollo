@@ -43,10 +43,10 @@ namespace config {
     bool nv_sunshine_high_power_mode;
 
     struct {
-      int preset;
+      std::string preset;  // FFmpeg preset name (p1-p7): the numeric values changed across FFmpeg versions
       int multipass;
       int h264_coder;
-      int aq;
+      int spatial_aq;
       int vbv_percentage_increase;
     } nv_legacy;
 

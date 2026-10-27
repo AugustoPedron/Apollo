@@ -48,7 +48,9 @@ elseif(UNIX)
     endif()
 endif()
 
-include_directories(BEFORE SYSTEM "${CMAKE_SOURCE_DIR}/third-party/nv-codec-headers/include")
+# Apollo's NVENC code is written for the SDK in this submodule. The FFmpeg package bundles newer NVENC headers
+# among its system includes, so this is a regular include: those are searched before any system include.
+include_directories(BEFORE "${CMAKE_SOURCE_DIR}/third-party/nv-codec-headers/include")
 file(GLOB NVENC_SOURCES CONFIGURE_DEPENDS "src/nvenc/*.cpp" "src/nvenc/*.h")
 list(APPEND PLATFORM_TARGET_FILES ${NVENC_SOURCES})
 
@@ -147,7 +149,7 @@ list(APPEND SUNSHINE_EXTERNAL_LIBRARIES
         enet
         libdisplaydevice::display_device
         nlohmann_json::nlohmann_json
-        opus
+        ${OPUS_LIBRARIES}
         ${FFMPEG_LIBRARIES}
         ${Boost_LIBRARIES}
         ${OPENSSL_LIBRARIES}
