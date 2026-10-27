@@ -30,6 +30,13 @@ if(BUILD_WERROR)
     list(APPEND SUNSHINE_COMPILE_OPTIONS -Werror)
 endif()
 
+# Strip symbols and debug information from release executables: the prebuilt FFmpeg libraries carry
+# their debug information, which otherwise more than doubles the executable size.
+# Not on macOS, where the linker doesn't support -s.
+if(NOT APPLE)
+    add_link_options("$<$<CONFIG:Release>:-s>")
+endif()
+
 # setup assets directory
 if(NOT SUNSHINE_ASSETS_DIR)
     set(SUNSHINE_ASSETS_DIR "assets")
