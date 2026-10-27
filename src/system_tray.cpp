@@ -197,8 +197,12 @@ namespace system_tray {
     }
 
     // Wait for the shell to be initialized before registering the tray icon.
-    // This ensures the tray icon works reliably after a logoff/logon cycle.
+    // This ensures the tray icon works reliably after a logoff/logon cycle, and at boot,
+    // where the service can start Apollo well before the taskbar exists.
     while (GetShellWindow() == nullptr) {
+      if (tray_thread_should_exit) {
+        return 1;
+      }
       Sleep(1000);
     }
   #endif
@@ -417,7 +421,10 @@ namespace system_tray {
 
     // Initialize the tray in this thread
     if (init_tray() != 0) {
-      BOOST_LOG(error) << "Failed to initialize tray in thread"sv;
+      // Not an error when shutdown was requested while waiting for the shell
+      if (!tray_thread_should_exit) {
+        BOOST_LOG(error) << "Failed to initialize tray in thread"sv;
+      }
       tray_thread_running = false;
       return;
     }
@@ -442,7 +449,7 @@ namespace system_tray {
   }
 
   int init_tray_threaded() {
-    if (tray_thread_running) {
+    if (tray_thread.joinable()) {
       BOOST_LOG(warning) << "Tray thread is already running"sv;
       return 1;
     }
@@ -469,14 +476,11 @@ namespace system_tray {
       while (!tray_thread_running && !tray_thread_should_exit) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        // Timeout after 10 seconds
+        // At boot the shell can take longer than this to start. Stopping the thread here would remove
+        // the icon as soon as it gets created, so leave it waiting and stop waiting for it instead.
         if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(10)) {
-          BOOST_LOG(error) << "Tray thread initialization timeout"sv;
-          tray_thread_should_exit = true;
-          if (tray_thread.joinable()) {
-            tray_thread.join();
-          }
-          return 1;
+          BOOST_LOG(info) << "System tray is waiting for the shell, the icon will appear once it is ready"sv;
+          return 0;
         }
       }
 
@@ -497,7 +501,8 @@ namespace system_tray {
   }
 
   int end_tray_threaded() {
-    if (!tray_thread_running) {
+    // Also covers a thread still waiting for the shell, which isn't running yet but must be joined
+    if (!tray_thread.joinable()) {
       return 0;
     }
 

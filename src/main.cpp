@@ -442,10 +442,8 @@ int main(int argc, char *argv[]) {
   if (tray_is_enabled && config::sunshine.system_tray) {
     BOOST_LOG(info) << "Starting system tray"sv;
 #ifdef _WIN32
-    // TODO: Windows has a weird bug where when running as a service and on the first Windows boot,
-    // he tray icon would not appear even though Sunshine is running correctly otherwise.
-    // Restarting the service would allow the icon to appear normally.
-    // For now we will keep the Windows tray icon on a separate thread.
+    // On Windows the tray runs on its own thread: at boot the service can start us well before the
+    // shell exists, and that thread waits for it so the icon still appears.
     // Ideally, we would run the system tray on the main thread for all platforms.
     system_tray::init_tray_threaded();
 #else
